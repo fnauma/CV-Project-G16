@@ -33,7 +33,7 @@ pip install opencv-python open3d pillow pillow-heif tqdm exifread matplotlib
 
 ## 🏗 3. Running the Pipeline
 
-Open the notebook main.ipynb in Colab
+Open the notebook `main.ipynb` in Colab
 Run all cells sequentially. Each stage prints logs and visualizes intermediate outputs.
 
 ## 🔍 4. Step-By-Step Instructions to Reproduce Results
@@ -122,7 +122,7 @@ triangulate_with_camera(cam_idx, prev_cam)
 
 ## 📦 6. Exporting & Viewing the 3D Point Cloud
 
-The notebook saves point_cloud.ply.
+The notebook saves `point_cloud.ply`.
 
 ## 📝 7. Notes & Recommendations
 
