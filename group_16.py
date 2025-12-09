@@ -46,7 +46,7 @@ drive.mount('/content/drive')
 
 """Reading and Displaying Images"""
 
-jpg_images = "/content/drive/MyDrive/cv/wall1"
+jpg_images = "/content/drive/MyDrive/cv/wall1_crop"
 
 #displaying the images
 
@@ -362,7 +362,7 @@ def find_best_initial_pair():
             max_inliers = num_inliers
             best_pair_idx = i
 
-    print(f"✓ Using pair {best_pair_idx}-{best_pair_idx+1} with {max_inliers} inliers")
+    print(f"Using pair {best_pair_idx}-{best_pair_idx+1} with {max_inliers} inliers")
     return best_pair_idx
 
 def initialize_two_view(pair_idx):
@@ -611,7 +611,7 @@ def visualize_and_save(points_3d, camera_poses):
         for pt in points_3d_array:
             f.write(f'{pt[0]} {pt[1]} {pt[2]}\n')
 
-    print("\n✓ Saved to 'point_cloud_multiview.ply'")
+    print("\nSaved to 'point_cloud_multiview.ply'")
 
     fig = plt.figure(figsize=(15, 5))
 
@@ -656,9 +656,7 @@ visualize_and_save(points_3d, camera_poses)
 """Refinement using Bundling"""
 
 def filter_outlier_points(points_3d, point_observations, camera_poses, keypoints, K, threshold=8.0):
-    """
-    Remove 3D points with high reprojection errors before bundle adjustment
-    """
+
     print(f"\nFiltering outliers (threshold={threshold} pixels)...")
 
     good_points = []
@@ -699,70 +697,8 @@ def filter_outlier_points(points_3d, point_observations, camera_poses, keypoints
     print(f"  Kept {len(good_points)}/{len(points_3d)} points")
     return good_points, good_observations
 
-
-def run_bundle_adjustment(camera_poses, points_3d, point_observations, K,
-                          max_nfev=50, verbose=2, xtol=1e-8, ftol=1e-8):
-    """
-    Fixed bundle adjustment with conservative parameters
-    """
-    cam_ids = sorted(camera_poses.keys())
-    num_cameras = len(cam_ids)
-    num_points = len(points_3d)
-
-    # Build observation arrays
-    obs_cam_idx, obs_point_idx, obs_xy = build_observation_arrays(
-        point_observations, keypoints, cam_ids
-    )
-    n_obs = len(obs_cam_idx)
-    print(f"Observations: {n_obs}, cameras: {num_cameras}, points: {num_points}")
-
-    # Pack initial parameters
-    x0 = pack_parameters(camera_poses, points_3d, cam_ids)
-
-    # Build jacobian sparsity pattern
-    J = build_jacobian_sparsity(num_cameras, num_points, obs_cam_idx, obs_point_idx)
-
-    def fun(params):
-        return residuals_vectorized(
-            params, K, num_cameras, num_points,
-            obs_cam_idx, obs_point_idx, obs_xy
-        )
-
-    # FIXED: More conservative parameters
-    res = least_squares(
-        fun,
-        x0,
-        jac_sparsity=J,
-        method='trf',
-        verbose=verbose,
-        max_nfev=max_nfev,  # Reduced iterations
-        x_scale='jac',      # Better scaling
-        loss='huber',       # Robust loss function
-        f_scale=1.0,        # Huber loss threshold
-        xtol=xtol,
-        ftol=ftol,
-    )
-
-    # Unpack and update camera poses & points
-    camera_params, point_params = unpack_parameters(res.x, num_cameras, num_points)
-
-    for i, cam_idx in enumerate(cam_ids):
-        rvec = camera_params[i][:3]
-        t = camera_params[i][3:].reshape(3, 1)
-        R, _ = cv2.Rodrigues(rvec)
-        camera_poses[cam_idx] = (R, t)
-
-    for i in range(num_points):
-        points_3d[i] = point_params[i]
-
-    print("✓ Bundle adjustment complete!")
-    print(f"  Final cost: {res.cost:.4f}")
-    print(f"  Optimality: {res.optimality:.2e}")
-
-    return res
-
 def skew_mat(v):
-    """v: (...,3) -> (...,3,3) skew-symmetric matrices"""
+
     vx = v[..., 0]
     vy = v[..., 1]
     vz = v[..., 2]
@@ -775,10 +711,7 @@ def skew_mat(v):
     return m.reshape(v.shape[:-1] + (3, 3))
 
 def rodrigues_batch(rvecs):
-    """
-    rvecs: (N,3) axis-angle vectors
-    returns: R (N,3,3)
-    """
+
     theta = np.linalg.norm(rvecs, axis=1)
     small = theta < 1e-8
     R = np.zeros((len(rvecs), 3, 3), dtype=float)
@@ -845,11 +778,6 @@ def unpack_parameters(params, num_cameras, num_points):
 
 def residuals_vectorized(params, K, num_cameras, num_points,
                          obs_cam_idx, obs_point_idx, obs_xy):
-    """
-    params: vector of length 6*num_cameras + 3*num_points
-    obs_*: arrays of length n_obs
-    returns: residuals shape (2*n_obs,)
-    """
     camera_params, point_params = unpack_parameters(params, num_cameras, num_points)
     # camera params
     rvecs = camera_params[:, :3]        # (C,3)
@@ -941,7 +869,6 @@ def run_bundle_adjustment(camera_poses, points_3d, point_observations, K,
         max_nfev=max_nfev,
         xtol=xtol,
         ftol=ftol,
-        # xtol_abs=1e-16
     )
 
     # Unpack and update camera poses & points
@@ -1049,7 +976,7 @@ def export_cameras_to_json(camera_poses, keypoints, image_folder, output_file="c
     with open(output_file, 'w') as f:
         json.dump(cameras_data, f, indent=2)
 
-    print(f"✓ Exported {len(cameras_data['cameras'])} cameras to {output_file}")
+    print(f"Exported {len(cameras_data['cameras'])} cameras to {output_file}")
     return cameras_data
 
 def create_view_graph(camera_poses, point_observations, threshold=10):
@@ -1095,7 +1022,7 @@ def create_view_graph(camera_poses, point_observations, threshold=10):
     with open("view_graph.json", 'w') as f:
         json.dump(view_graph_data, f, indent=2)
 
-    print(f"✓ Created view graph with {len(view_graph_data['edges'])} edges")
+    print(f"Created view graph with {len(view_graph_data['edges'])} edges")
     return view_graph
 
 export_cameras_to_json(camera_poses, keypoints, jpg_images, "cameras.json")
@@ -1160,7 +1087,7 @@ def extract_point_colors(points_3d, point_observations, camera_poses, keypoints,
             print(f"  Processed {pt_idx + 1}/{len(points_3d)} points...")
 
     colors = np.array(colors)
-    print(f"✓ Extracted colors for {len(colors)} points")
+    print(f"Extracted colors for {len(colors)} points")
     return colors
 
 def export_colored_ply(points_3d, colors, output_file="output/reconstruction_colored.ply"):
@@ -1187,7 +1114,7 @@ def export_colored_ply(points_3d, colors, output_file="output/reconstruction_col
         for pt, color in zip(points, colors):
             f.write(f'{pt[0]} {pt[1]} {pt[2]} {color[0]} {color[1]} {color[2]}\n')
 
-    print(f"✓ Saved colored point cloud to {output_file}")
+    print(f"Saved colored point cloud to {output_file}")
 
 def add_colors_to_reconstruction(camera_poses, points_3d, point_observations,
                                  keypoints, image_folder, K,
@@ -1206,7 +1133,7 @@ def add_colors_to_reconstruction(camera_poses, points_3d, point_observations,
     export_colored_ply(points_3d, colors, output_file)
 
     print("\n" + "="*60)
-    print("✓ COLORED POINT CLOUD READY!")
+    print("COLORED POINT CLOUD READY!")
     print(f"  Use {output_file} in your viewer")
     print("="*60)
 
@@ -1422,4 +1349,4 @@ flip_wallA_rotations()
 print("\nStep 3: Combining all cameras...")
 combine_cameras()
 
-print("\n✓ Complete! Use merged_room.ply and all_cameras.json")
+print("\nComplete! Use merged_room.ply and all_cameras.json")
