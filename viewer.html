@@ -335,6 +335,27 @@
         let currentCameraIndex = 0;
         let isTransitioning = false;
         let sceneCenter, sceneSize;
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+
+        function onClickCameraMarker(event) 
+        {
+            const rect = renderer.domElement.getBoundingClientRect();
+
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(scene.children);
+            const hit = intersects.find(obj => obj.object.userData.cameraIndex !== undefined);
+
+            if (hit) {
+                const index = hit.object.userData.cameraIndex;
+                setViewFromCamera(index);
+            }
+        }
+
         
         function init() {
             // Scene
@@ -363,6 +384,8 @@
             controls.rotateSpeed = 0.5;
             controls.panSpeed = 0.8;
             controls.zoomSpeed = 1.2;
+
+            renderer.domElement.addEventListener('pointerdown', onClickCameraMarker);
             
             // Lights
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -379,6 +402,19 @@
             // Load data
             loadReconstruction();
         }
+
+        function addCameraMarkers() {
+            const geo = new THREE.SphereGeometry(0.05, 8, 8);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+
+            cameras.forEach((cam, i) => {
+                const marker = new THREE.Mesh(geo, mat.clone());
+                marker.position.set(cam.center[0], cam.center[1], cam.center[2]);
+                marker.userData.cameraIndex = i;
+                scene.add(marker);
+            });
+        }
+
         
         async function loadReconstruction() {
             try {
@@ -420,6 +456,7 @@
                 
                 document.getElementById('loading').classList.add('hidden');
                 animate();
+                addCameraMarkers();
                 
             } catch (error) {
                 console.error('Error loading:', error);
@@ -427,6 +464,7 @@
                     '<p style="color: #ff6b6b;">Error loading reconstruction</p>' +
                     '<p style="font-size: 12px; margin-top: 10px;">Check console for details</p>';
             }
+
         }
 
         function parsePLY(plyText) {
@@ -492,55 +530,53 @@
         
         function setViewFromCamera(index) {
             if (index < 0 || index >= cameras.length || isTransitioning) return;
-            
+
             isTransitioning = true;
             const cam = cameras[index];
-            
-            const targetPos = new THREE.Vector3(cam.center[0], cam.center[1], cam.center[2]);
+
+            const camPos = new THREE.Vector3(
+                cam.center[0],
+                cam.center[1],
+                cam.center[2]
+            );
+
+            // forward direction from rotation matrix (world → camera)
+            const R = cam.rotation;
+            const forward = new THREE.Vector3(
+                -R[0][2],
+                -R[1][2],
+                -R[2][2]
+            ).normalize();
+
+            // Look target = forward direction from camera
+            const lookTarget = camPos.clone().add(forward.multiplyScalar(0.7));
+
             const startPos = camera.position.clone();
             const startTarget = controls.target.clone();
-            
-            const duration = 1000;
-            const startTime = Date.now();
-            
-            function animate() {
-                const elapsed = Date.now() - startTime;
-                const t = Math.min(elapsed / duration, 1);
-                const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-                
-                camera.position.lerpVectors(startPos, targetPos, eased);
-                
-                const box = new THREE.Box3().setFromObject(pointCloud);
-                const center = box.getCenter(new THREE.Vector3());
-                
-                // Camera forward direction from rotation matrix
-                const R = cam.rotation;
-                const forward = new THREE.Vector3(
-                    -R[0][2], 
-                    -R[1][2], 
-                    -R[2][2]
-                ).normalize();
 
-                // Compute real viewing target
-                const camTarget = targetPos.clone().add(forward);
+            const duration = 900;
+            const startTime = performance.now();
 
-                // Animate controls.target towards camTarget
-                controls.target.lerpVectors(startTarget, camTarget, eased);
+            function animateCam() {
+                const t = Math.min((performance.now() - startTime) / duration, 1);
+                const eased = t * (2 - t);
 
-                
+                camera.position.lerpVectors(startPos, camPos, eased);
+                controls.target.lerpVectors(startTarget, lookTarget, eased);
+
                 controls.update();
-                
-                if (t < 1) {
-                    requestAnimationFrame(animate);
-                } else {
+
+                if (t < 1) requestAnimationFrame(animateCam);
+                else {
                     currentCameraIndex = index;
                     document.getElementById('current-view').textContent = index + 1;
                     isTransitioning = false;
                 }
             }
-            
-            animate();
+
+            animateCam();
         }
+
         
         function nextView() {
             if (cameras.length === 0) return;
