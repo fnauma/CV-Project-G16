@@ -46,7 +46,7 @@ drive.mount('/content/drive')
 
 """Reading and Displaying Images"""
 
-jpg_images = "/content/drive/MyDrive/cv/wall1_crop"
+jpg_images = "/content/drive/MyDrive/cv/wall1"
 
 #displaying the images
 
